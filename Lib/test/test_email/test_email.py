@@ -2,6 +2,7 @@
 # Contact: email-sig@python.org
 # email package unit tests
 
+import binascii
 import re
 import time
 import base64
@@ -4457,6 +4458,90 @@ eHh4eCB4eHh4IA==\r
         # Test the charset option
         eq(he('hello', charset='iso-8859-2'), '=?iso-8859-2?b?aGVsbG8=?=')
         eq(he('hello\nworld'), '=?iso-8859-1?b?aGVsbG8Kd29ybGQ=?=')
+
+    def valid_base64_feeds(self):
+        # Originally created for issue 44660.
+
+        alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        feed_value1 = StringIO()
+        feed_value2 = StringIO()
+        feed_value3 = StringIO()
+        feed_value4 = StringIO()
+        for i in range(0, 8):
+            feed_value1.write(alphabet[i])
+            for j in range(44, 52):
+                feed_value2.write(alphabet[j])
+                for k in range(52, 58):
+                    feed_value3.write(alphabet[k])
+                    for m in range(62, 64):
+                        feed_value4.write(alphabet[m])
+                        feed_values = [
+                            feed_value1.getvalue(),
+                            feed_value2.getvalue(),
+                            feed_value3.getvalue(),
+                            feed_value4.getvalue(),
+                        ]
+                        final_quantum_length = sum(len(feed_value) for feed_value in feed_values) % 4
+                        final_feed_value = (
+                            '=' if final_quantum_length == 3
+                            else '==' if final_quantum_length == 2
+                            else '0==' if final_quantum_length == 1
+                            else ''
+                        )
+                        if final_feed_value:
+                            feed_values.append(final_feed_value)
+                        yield feed_values
+
+    def test_base64_feed_decoder_success(self):
+        # Originally created for issue 44660.
+
+        for feed_values in self.valid_base64_feeds():  # This loop can be converted to a parameterized test.
+            expected_value = base64.b64decode(''.join(feed_values), validate=True)
+            actual_value = bytearray()
+            test_subject = base64mime.Base64FeedDecoder(actual_value.extend)
+
+            for feed_value in feed_values:
+                test_subject.feed(feed_value.encode('ascii'))
+            test_subject.close()
+
+            self.assertEqual(actual_value, expected_value)
+
+    def invalid_base64_feeds(self):
+        # Originally created for issue 44660.
+
+        return {
+            'three_fed_two_decoded': (('abc', '=', 'defg'), 'abc='),
+            'one_of_one_fed_none_decoded': (('abc=defg',), ''),
+            'two_fed_none_decoded': (('abc', '=defg'), ''),
+            'one_fed_one_decoded': (('abc=', 'defg'), 'abc='),
+            'one_of_two_fed_none_decoded': (('abc=d', 'efg'), ''),
+        }
+
+    def test_base64_feed_decoder_failure(self):
+        # Originally created for issue 44660.
+
+        for test_case_id, test_case in self.invalid_base64_feeds().items():
+            bad_feed, encoded_value = test_case
+            expected_value = base64.b64decode(encoded_value, validate=True)
+            actual_value = bytearray()
+            test_subject = base64mime.Base64FeedDecoder(actual_value.extend)
+
+            try:
+                for feed_value in bad_feed:
+                    test_subject.feed(feed_value.encode('ascii'))
+                actual_exception = None
+            except Exception as e:
+                actual_exception = e
+
+            generic_error_message = f'Test case {test_case_id} failed.'
+            self.assertIsInstance(actual_exception, binascii.Error, generic_error_message)
+            self.assertEqual(
+                actual_value,
+                expected_value,
+                f'{generic_error_message}'
+                f'\nBad Feed ({type(bad_feed)}): {bad_feed}; Encoded Value: {encoded_value}'
+                f'\nExpected: {expected_value}; Actual: {actual_value}.'
+            )
 
 
 class TestQuopri(unittest.TestCase):
