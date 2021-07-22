@@ -4515,6 +4515,8 @@ eHh4eCB4eHh4IA==\r
             'two_fed_none_decoded': (('abc', '=defg'), ''),
             'one_fed_one_decoded': (('abc=', 'defg'), 'abc='),
             'one_of_two_fed_none_decoded': (('abc=d', 'efg'), ''),
+            'bad_char': (('underscore_char', 'is_not_base64'), ''),
+            # 'bad_char_in_3rd_feed_value': (('underscore', 'char', 'is_not_base64'), 'underscorech'),
         }
 
     def test_base64_feed_decoder_failure(self):
