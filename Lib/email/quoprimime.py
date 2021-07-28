@@ -297,3 +297,46 @@ def header_decode(s):
     """
     s = s.replace('_', ' ')
     return re.sub(r'=[a-fA-F0-9]{2}', _unquote_match, s, flags=re.ASCII)
+
+
+def encode(data: bytes, maxlinelen=76, eol=None) -> bytes:
+    CRLF = b'\r\n'
+    HTSPACE = bytes([9, 32])
+    eol = (
+        eol if isinstance(eol, bytes)
+        else eol.encode('ascii') if isinstance(eol, str)
+        else CRLF
+    )
+    soft_line_break = b'=' + eol
+    output = bytearray()
+    curlinelen = 0
+    i = 0
+    while i < len(data):
+        b = data[i - 1] if i >= 1 else None
+        c = data[i]
+        d = data[i + 1] if i + 1 < len(data) else None
+        encoded_byte = (
+            bytes([c])
+            if (c in HTSPACE or (c >= 33 and c <= 60) or (c >= 62 and c <= 126))
+            else f'={c:02X}'.encode('ascii')
+        )
+        worst_case_length = (
+            0 if (c not in HTSPACE and isinstance(d, int) and d in CRLF)
+            else 1
+        ) + len(encoded_byte)
+        if c in CRLF:  # Add eol and skip over current char.
+            output.extend(eol)
+            curlinelen = 0
+            i += 1
+            if isinstance(d, int) and d != c and d in CRLF:  # Skip over next char.
+                i += 1
+            continue
+        elif (curlinelen + worst_case_length) > maxlinelen:
+            output.extend(soft_line_break)
+            curlinelen = 0
+        output.extend(encoded_byte)
+        curlinelen += len(encoded_byte)
+        i += 1
+    if c in HTSPACE:
+        output.extend(soft_line_break)
+    return bytes(output)
