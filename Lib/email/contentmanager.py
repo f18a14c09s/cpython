@@ -178,6 +178,29 @@ def _encode_text(string, charset, cte, policy):
     return cte, data
 
 
+def _has_unicode_header_values(message: email.message.Message):
+    """
+    Checks whether specified message's header or a descendent part's header
+     contains any Unicode text values.
+    """
+
+    message_parts = [message]
+    message_part_index = 0
+    while message_part_index < len(message_parts):
+        # Get message part for current loop iteration:
+        message_part = message_parts[message_part_index]
+        message_part_index += 1
+        # Check header of current message part:
+        for header_field_value in message_part.values():
+            utf8_encoded_bytes = header_field_value.encode('utf-8')
+            if len(utf8_encoded_bytes) > len(header_field_value):
+                return True
+        # Include children for processing in subsequent loop iterations:
+        if message_part.is_multipart():
+            message_parts.extend(message_part.get_payload())
+    return False
+
+
 def set_text_content(msg, string, subtype="plain", charset='utf-8', cte=None,
                      disposition=None, filename=None, cid=None,
                      params=None, headers=None):
@@ -192,7 +215,7 @@ def set_text_content(msg, string, subtype="plain", charset='utf-8', cte=None,
 raw_data_manager.add_set_handler(str, set_text_content)
 
 
-def set_message_content(msg, message, subtype="rfc822", cte=None,
+def set_message_content(msg, message, subtype=None, cte=None,
                        disposition=None, filename=None, cid=None,
                        params=None, headers=None):
     if subtype == 'partial':
@@ -202,12 +225,39 @@ def set_message_content(msg, message, subtype="rfc822", cte=None,
             # http://tools.ietf.org/html/rfc2046#section-5.2.1 mandate.
             raise ValueError(
                 "message/rfc822 parts do not support cte={}".format(cte))
+        if _has_unicode_header_values(message):
+            raise ValueError(
+                "message/rfc822 parts cannot contain Unicode header data")
+    if subtype is None:
+        if _has_unicode_header_values(message):
+            subtype = 'global'
+        else:
+            subtype = 'rfc822'
+    # If subtype is currently "rfc822," this implies that the message header and
+    # any headers in nested parts contain only 7- and/or 8-bit data.  However,
+    # Message objects are mutable; so subtype will become inaccurate if Unicode
+    # data are subsequently added to header.
+    if subtype == 'rfc822':
         # 8bit will get coerced on serialization if policy.cte_type='7bit'.  We
         # may end up claiming 8bit when it isn't needed, but the only negative
         # result of that should be a gateway that needs to coerce to 7bit
         # having to look through the whole embedded message to discover whether
         # or not it actually has to do anything.
         cte = '8bit' if cte is None else cte
+    elif subtype == 'global':
+        if message.policy.utf8:
+            # Policy doesn't specify 7-bit-only transport, so cte should be
+            # either 8-bit or binary (RFC 6532, s. 3.7).
+            cte = '8bit' if cte is None else cte
+        else:
+            # Policy specifies 7-bit-only transport, so the only official cte's
+            # that will work are quoted-printable and base64 (RFC 2045, s. 6.2).
+            if cte not in (None, 'quoted-printable', 'base64'):
+                raise ValueError(
+                    f"message/global parts do not support cte={cte}"
+                    " over 7-bit-only transport"
+                )
+            cte = 'quoted-printable' if cte is None else cte
     elif subtype == 'external-body':
         if cte not in (None, '7bit'):
             # http://tools.ietf.org/html/rfc2046#section-5.2.3 mandate.
