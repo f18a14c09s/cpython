@@ -232,6 +232,7 @@ def set_message_content(msg, message, subtype=None, cte=None,
         if _has_unicode_header_values(message):
             subtype = 'global'
         else:
+            # This is the original default subtype:
             subtype = 'rfc822'
     # If subtype is currently "rfc822," this implies that the message header and
     # any headers in nested parts contain only 7- and/or 8-bit data.  However,
