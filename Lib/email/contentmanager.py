@@ -76,7 +76,7 @@ for maintype in 'audio image video application'.split():
 
 def get_message_content(msg):
     return msg.get_payload(0)
-for subtype in 'rfc822 external-body'.split():
+for subtype in 'rfc822 global external-body'.split():
     raw_data_manager.add_get_handler('message/'+subtype, get_message_content)
 
 
