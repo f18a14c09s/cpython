@@ -26,8 +26,9 @@ def utf8_header_field_params():
 )
 def test_rfc6532_set_global_message_content(field_name, field_value_format_str):
     """
-    Parsing of Unix-From address that contains UTF-8 characters;
-     from UTF-8-encoded, top-level e-mail header.
+    Explicit configuration of "global" message subtype and "quoted-printable"
+     Content-Transfer-Encoding when message with UTF-8 in header field value
+     is set as the content of (i.e. nested in) a top-level message.
     """
 
     message = EmailMessage()
@@ -40,11 +41,13 @@ def test_rfc6532_set_global_message_content(field_name, field_value_format_str):
     expected_value = field_value_format_str.format(utf8_str_1, utf8_str_2)
     global_message[field_name] = expected_value
     expected_cte = 'quoted-printable'
+
     message.set_content(
         global_message,
         subtype='global',
         cte=expected_cte
     )
+
     assert isinstance(message.get_content_type(), str)
     assert message.get_content_type()
     assert message.get_content_type() != orig_content_type

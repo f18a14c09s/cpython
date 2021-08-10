@@ -27,6 +27,14 @@ def utf8_header_field_params():
     utf8_header_field_params()
 )
 def test_rfc6532_set_global_message_content(field_name, field_value_format_str):
+    """
+    Generation of RFC 822 string that has ASCII characters only, from message
+     object whose content:
+     - Is another message object with UTF-8 in header field value; and
+     - Has explicit configuration of "global" message subtype and
+      "quoted-printable" Content-Transfer-Encoding.
+    """
+
     message = EmailMessage()
     assert isinstance(message.get_content_type(), str)
     orig_content_type = str(message.get_content_type())
@@ -69,6 +77,11 @@ def test_rfc6532_set_global_message_content(field_name, field_value_format_str):
     utf8_header_field_params()
 )
 def test_rfc6532_global_message_generation(field_name, field_value_format_str):
+    """
+    Generation of RFC 822 string that has UTF-8 characters, from message object
+     that has header field value with UTF-8 characters.
+    """
+
     global_message = EmailMessage()
     utf8_str_1 = 'ⒶⒷⒸ'
     utf8_str_2 = '①②③'
